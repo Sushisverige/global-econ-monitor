@@ -31,23 +31,32 @@ def main():
         'NY.GDP.MKTP.KD.ZG': 'GDP成長率 (GDP Growth)',
         'SL.UEM.TOTL.ZS': '失業率 (Unemployment)'
     }
-    countries = ['JP', 'SE', 'US']
+    
+    # 【修正点】国コードを2文字(JP)から3文字(JPN)に変更
+    countries = ['JPN', 'SWE', 'USA']
+    
     start_year = 2000
     end_year = datetime.now().year
 
     @st.cache_data
     def load_data():
         try:
-            # wbgapiでデータ取得（ここが最新版）
+            # データ取得
             data = wb.data.DataFrame(list(indicators.keys()), 
                                      economy=countries, 
                                      time=range(start_year, end_year + 1), 
                                      numericTime=True)
+            
+            if data is None or data.empty:
+                return pd.DataFrame()
+
             data = data.reset_index()
             data = data.rename(columns={'economy': 'country', 'time': 'year'})
             data = data.rename(columns=indicators)
             return data
         except Exception as e:
+            # エラー内容を画面に出す（デバッグ用）
+            st.error(f"データ取得エラー詳細: {e}")
             return pd.DataFrame()
 
     df = load_data()
@@ -60,6 +69,8 @@ def main():
             if target_col in df.columns:
                 fig = px.line(df, x="year", y=target_col, color="country", markers=True)
                 st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("インフレ率データが見つかりませんでした。")
 
         with col2:
             st.subheader("🤖 AIエコノミスト")
@@ -73,11 +84,10 @@ def main():
                             latest_year = df['year'].max()
                             latest_data = df[df['year'] == latest_year].to_string()
                             prompt = f"""
-                            あなたはプロの経済アナリストです。以下のデータ（JP, SE, US）に基づき、
+                            あなたはプロの経済アナリストです。以下のデータ（JPN, SWE, USA）に基づき、
                             なぜ日本だけ特殊な動きをしているのか辛口に解説してください。
                             データ: {latest_data}
                             """
-                            # モデル自動切り替え
                             try:
                                 model = genai.GenerativeModel('gemini-1.5-flash')
                                 response = model.generate_content(prompt)
@@ -92,7 +102,9 @@ def main():
         st.divider()
         st.caption("Compliance: Data from World Bank API (wbgapi). Analysis by Google Gemini.")
     else:
-        st.warning("データ取得待機中...")
+        # データが取れなかった場合
+        st.warning("⚠️ データが取得できませんでした。")
+        st.write("考えられる原因：World BankのAPIが一時的に混雑しているか、国コードの設定ミスです。")
 
 if __name__ == "__main__":
     main()
