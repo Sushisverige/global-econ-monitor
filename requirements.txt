@@ -1,0 +1,8 @@
+streamlit
+pandas
+pandas-datareader
+requests
+python-dotenv
+google-generativeai
+tenacity
+plotly
