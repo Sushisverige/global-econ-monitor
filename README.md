@@ -1,17 +1,20 @@
-# Global Econ Monitor vs Japan (G7 Comparison Dashboard)
+# 🌏 Global Econ Monitor: AI Analysis
 
-## 📌 Project Overview
-世界銀行 (World Bank) のオープンデータAPIを活用し、日本とG7諸国・スウェーデンの経済指標（インフレ率、実質賃金など）をリアルタイムで比較・可視化するダッシュボードです。
+世界銀行のオープンデータをリアルタイムで取得し、生成AI (Google Gemini) が経済指標を分析するダッシュボードアプリです。
+日本、スウェーデン、米国のインフレ率・GDP成長率・失業率を比較し、AIが「なぜ日本経済が特殊な動きをしているのか」を辛口に解説します。
 
-## 🛡 Compliance & Ethics (設計思想)
-1. **No Scraping Policy**: World Bank Open Data API のみを使用し、規約を遵守。
-2. **Privacy by Design**: 個人情報を一切保持しないステートレス設計。
-3. **AI Governance**: AIの回答には必ず免責とデータ出典を明記。
+## 🚀 デモアプリ (Live Demo)
+**[👉 ここをクリックしてアプリを開く (Click Here)](https://global-econ-monitor-vnheasvzdqefoi6mqhssvj.streamlit.app/)**
 
-## 🛠 Tech Stack
-* Python 3.10, Streamlit, Docker, GitHub Actions, Gemini API
+## 🛠 使用技術 (Tech Stack)
+- **Frontend:** Streamlit
+- **Data Source:** World Bank Open Data (via wbgapi)
+- **AI Engine:** Google Gemini 1.5 Flash (via Google AI Studio)
+- **Visualization:** Plotly Express
+- **Deploy:** Streamlit Cloud
 
-## 🚀 Quick Start
-```bash
-docker-compose up --build
-```
+## ✨ 主な機能
+1. **リアルタイムデータ取得:** APIを通じて最新の経済指標を自動取得
+2. **インタラクティブなグラフ:** Plotlyによる動的なデータ可視化
+3. **AIアナリスト:** Gemini APIを使用し、データに基づいた経済分析レポートを自動生成
+4. **堅牢な設計:** API接続エラー時の自動ハンドリング機能搭載
