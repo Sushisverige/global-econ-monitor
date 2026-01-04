@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from pandas_datareader import wb
+import wbgapi as wb  # 新しいライブラリ
 import plotly.express as px
 from datetime import datetime
 import google.generativeai as genai
@@ -14,30 +14,21 @@ if api_key:
     genai.configure(api_key=api_key)
 
 def main():
-    st.title("🌏 Global Econ Monitor: AI Analysis (Debug Mode)")
+    st.title("🌏 Global Econ Monitor: AI Analysis")
     st.markdown("### 日本 vs スウェーデン vs 米国：AIによる経済構造分析")
     
-    # API接続テスト（サイドバーに表示）
+    # 接続診断
     with st.sidebar:
         st.header("🔧 接続診断")
         if not api_key:
-            st.error("❌ APIキーが設定されていません")
+            st.error("❌ APIキー未設定")
         else:
-            try:
-                st.write("APIキー: 認識済み")
-                # 利用可能なモデル一覧を取得して表示
-                models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-                st.success(f"✅ 接続OK! 利用可能モデル数: {len(models)}")
-                st.code("\n".join(models))
-                # 優先的に使うモデルを決める
-                valid_models = [m for m in models if 'flash' in m or 'pro' in m]
-                model_name = valid_models[0] if valid_models else 'models/gemini-pro'
-                st.info(f"使用するモデル: {model_name}")
-            except Exception as e:
-                st.error(f"❌ モデル一覧取得エラー: {e}")
-                model_name = None
+            st.success("✅ APIキー認識OK")
 
-    # データ取得ロジック
+    st.info("データソース: World Bank Open Data (via wbgapi) | AIエンジン: Google Gemini")
+
+    # 1. データ取得設定
+    # キー: インフレ率, GDP成長率, 失業率
     indicators = {
         'FP.CPI.TOTL.ZG': 'インフレ率 (Inflation)',
         'NY.GDP.MKTP.KD.ZG': 'GDP成長率 (GDP Growth)',
@@ -50,12 +41,23 @@ def main():
     @st.cache_data
     def load_data():
         try:
-            data = wb.download(indicator=list(indicators.keys()), country=countries, start=start_year, end=end_year)
+            # wbgapiを使用してデータを取得（ここを刷新）
+            # numericTime=Trueで年を数値化、indexをリセットして扱いやすくする
+            data = wb.data.DataFrame(list(indicators.keys()), 
+                                     economy=countries, 
+                                     time=range(start_year, end_year + 1), 
+                                     numericTime=True)
+            
+            # データの整形
             data = data.reset_index()
-            data['year'] = data['year'].astype(int)
+            # wbgapiは 'economy', 'time' というカラム名で返すのでリネーム
+            data = data.rename(columns={'economy': 'country', 'time': 'year'})
+            
+            # 指標コードをわかりやすい名前に変更
             data = data.rename(columns=indicators)
             return data
-        except Exception:
+        except Exception as e:
+            st.error(f"データ取得エラー: {e}")
             return pd.DataFrame()
 
     df = load_data()
@@ -64,19 +66,25 @@ def main():
         col1, col2 = st.columns([3, 1])
         with col1:
             st.subheader("📊 インフレ率の推移")
+            # データが存在するカラム名を取得
             target_col = indicators['FP.CPI.TOTL.ZG']
-            fig = px.line(df, x="year", y=target_col, color="country", markers=True)
-            st.plotly_chart(fig, use_container_width=True)
+            
+            # データフレームに該当カラムがあるか確認
+            if target_col in df.columns:
+                fig = px.line(df, x="year", y=target_col, color="country", markers=True)
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("インフレ率データの取得に失敗しました")
 
         with col2:
             st.subheader("🤖 AIエコノミスト")
-            st.write("直近のデータを基に、日本経済の課題を分析します。")
+            st.write("直近のデータを基に分析します。")
             
             if st.button("AI解説を生成する"):
-                if not api_key or not model_name:
-                    st.error("API接続に問題があるため実行できません。サイドバーを確認してください。")
+                if not api_key:
+                    st.error("APIキーがありません。Secretsを設定してください。")
                 else:
-                    with st.spinner(f"AIが分析中... (Model: {model_name})"):
+                    with st.spinner("AIが分析中..."):
                         try:
                             latest_year = df['year'].max()
                             latest_data = df[df['year'] == latest_year].to_string()
@@ -86,20 +94,24 @@ def main():
                             データ: {latest_data}
                             """
                             
-                            # 自動判別したモデル名を使用
-                            model = genai.GenerativeModel(model_name)
-                            response = model.generate_content(prompt)
+                            # モデル自動切り替え
+                            try:
+                                model = genai.GenerativeModel('gemini-1.5-flash')
+                                response = model.generate_content(prompt)
+                            except:
+                                model = genai.GenerativeModel('gemini-pro')
+                                response = model.generate_content(prompt)
                             
                             st.success("分析完了！")
                             st.markdown(response.text)
                             
                         except Exception as e:
-                            st.error(f"エラー詳細: {e}")
+                            st.error(f"AIエラー: {e}")
 
         st.divider()
-        st.caption("Compliance: Data from World Bank API. Analysis by Google Gemini.")
+        st.caption("Compliance: Data from World Bank API (wbgapi). Analysis by Google Gemini.")
     else:
-        st.warning("データ取得失敗")
+        st.warning("データが取得できませんでした。しばらく待ってからリロードしてください。")
 
 if __name__ == "__main__":
     main()
