@@ -35,4 +35,4 @@ This project is licensed under the [MIT License](LICENSE).
 - **Usage:** 本アプリは技術デモンストレーションを目的としており、商用サービスではありません。
 
 ## 👨‍💻 Author
-Created by [Your Name]
+Created by Sushisverige
