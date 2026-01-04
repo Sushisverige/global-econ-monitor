@@ -32,41 +32,39 @@ def main():
         'SL.UEM.TOTL.ZS': '失業率 (Unemployment)'
     }
     
-    # 国コード（3文字）
     countries = ['JPN', 'SWE', 'USA']
-    
     start_year = 2000
     end_year = datetime.now().year
 
     @st.cache_data
     def load_data():
         try:
-            # 【修正】numericTime=True を削除（エラー回避のため）
-            data = wb.data.DataFrame(list(indicators.keys()), 
-                                     economy=countries, 
-                                     time=range(start_year, end_year + 1))
+            # 【最終解決策】wb.data.fetchを使って、生の辞書リストとして取得する
+            # これならフォーマットの崩れようがない
+            raw_data = list(wb.data.fetch(list(indicators.keys()), 
+                                          economy=countries, 
+                                          time=range(start_year, end_year + 1)))
             
-            if data is None or data.empty:
+            # 生データをDataFrame化
+            df = pd.DataFrame(raw_data)
+            
+            if df.empty:
                 return pd.DataFrame()
 
-            # インデックスを列に戻す
-            data = data.reset_index()
+            # データ整形: 'YR2000' -> 2000
+            df['time'] = df['time'].astype(str).str.replace('YR', '').astype(int)
             
-            # 【修正】カラム名を強制的にリネーム（小文字に統一されることがあるため安全策）
-            # wbgapiは通常 'economy', 'time' を返す
-            if 'economy' in data.columns:
-                data = data.rename(columns={'economy': 'country'})
-            if 'time' in data.columns:
-                data = data.rename(columns={'time': 'year'})
+            # ピボットテーブル操作（行:国・年, 列:指標, 値:数値）
+            # これで必ず狙った形になる
+            df_pivot = df.pivot(index=['economy', 'time'], columns='series', values='value').reset_index()
             
-            # 【修正】"YR2000" みたいな文字列を "2000" に手動変換
-            data['year'] = data['year'].astype(str).str.replace('YR', '').astype(int)
+            # カラム名の修正
+            df_pivot = df_pivot.rename(columns={'economy': 'country', 'time': 'year'})
+            df_pivot = df_pivot.rename(columns=indicators)
             
-            # 指標IDを名前に変換
-            data = data.rename(columns=indicators)
-            return data
+            return df_pivot
         except Exception as e:
-            st.error(f"データ取得エラー詳細: {e}")
+            st.error(f"データ処理エラー: {e}")
             return pd.DataFrame()
 
     df = load_data()
@@ -76,19 +74,19 @@ def main():
         with col1:
             st.subheader("📊 インフレ率の推移")
             target_col = indicators['FP.CPI.TOTL.ZG']
-            # データがあるか確認して描画
+            # データがあるか確認
             if target_col in df.columns:
                 fig = px.line(df, x="year", y=target_col, color="country", markers=True)
                 st.plotly_chart(fig, use_container_width=True)
             else:
-                st.warning("インフレ率データが欠損しています。")
+                st.warning("インフレ率データがありませんでした。")
 
         with col2:
             st.subheader("🤖 AIエコノミスト")
             st.write("ボタンを押すと分析を開始します。")
             if st.button("AI解説を生成する"):
                 if not api_key:
-                    st.error("Secretsが未設定です。")
+                    st.error("Secrets未設定")
                 else:
                     with st.spinner("AIが分析中..."):
                         try:
@@ -111,7 +109,7 @@ def main():
                         except Exception as e:
                             st.error(f"AIエラー: {e}")
         st.divider()
-        st.caption("Compliance: Data from World Bank API (wbgapi). Analysis by Google Gemini.")
+        st.caption("Compliance: Data from World Bank API. Analysis by Google Gemini.")
     else:
         st.warning("⚠️ データが取得できませんでした。")
 
