@@ -32,7 +32,7 @@ def main():
         'SL.UEM.TOTL.ZS': '失業率 (Unemployment)'
     }
     
-    # 【修正点】国コードを2文字(JP)から3文字(JPN)に変更
+    # 国コード（3文字）
     countries = ['JPN', 'SWE', 'USA']
     
     start_year = 2000
@@ -41,21 +41,31 @@ def main():
     @st.cache_data
     def load_data():
         try:
-            # データ取得
+            # 【修正】numericTime=True を削除（エラー回避のため）
             data = wb.data.DataFrame(list(indicators.keys()), 
                                      economy=countries, 
-                                     time=range(start_year, end_year + 1), 
-                                     numericTime=True)
+                                     time=range(start_year, end_year + 1))
             
             if data is None or data.empty:
                 return pd.DataFrame()
 
+            # インデックスを列に戻す
             data = data.reset_index()
-            data = data.rename(columns={'economy': 'country', 'time': 'year'})
+            
+            # 【修正】カラム名を強制的にリネーム（小文字に統一されることがあるため安全策）
+            # wbgapiは通常 'economy', 'time' を返す
+            if 'economy' in data.columns:
+                data = data.rename(columns={'economy': 'country'})
+            if 'time' in data.columns:
+                data = data.rename(columns={'time': 'year'})
+            
+            # 【修正】"YR2000" みたいな文字列を "2000" に手動変換
+            data['year'] = data['year'].astype(str).str.replace('YR', '').astype(int)
+            
+            # 指標IDを名前に変換
             data = data.rename(columns=indicators)
             return data
         except Exception as e:
-            # エラー内容を画面に出す（デバッグ用）
             st.error(f"データ取得エラー詳細: {e}")
             return pd.DataFrame()
 
@@ -66,11 +76,12 @@ def main():
         with col1:
             st.subheader("📊 インフレ率の推移")
             target_col = indicators['FP.CPI.TOTL.ZG']
+            # データがあるか確認して描画
             if target_col in df.columns:
                 fig = px.line(df, x="year", y=target_col, color="country", markers=True)
                 st.plotly_chart(fig, use_container_width=True)
             else:
-                st.warning("インフレ率データが見つかりませんでした。")
+                st.warning("インフレ率データが欠損しています。")
 
         with col2:
             st.subheader("🤖 AIエコノミスト")
@@ -102,9 +113,7 @@ def main():
         st.divider()
         st.caption("Compliance: Data from World Bank API (wbgapi). Analysis by Google Gemini.")
     else:
-        # データが取れなかった場合
         st.warning("⚠️ データが取得できませんでした。")
-        st.write("考えられる原因：World BankのAPIが一時的に混雑しているか、国コードの設定ミスです。")
 
 if __name__ == "__main__":
     main()
