@@ -17,14 +17,28 @@ def main():
     st.title("🌏 Global Econ Monitor: AI Analysis")
     st.markdown("### 日本 vs スウェーデン vs 米国：AIによる経済構造分析")
     
+    # 【強化版】サイドバーで接続とモデルを事前チェック
     with st.sidebar:
         st.header("🔧 接続診断")
         if not api_key:
             st.error("❌ APIキー未設定")
         else:
-            st.success("✅ APIキー認識OK")
+            try:
+                # 実際にAPIを叩いて、使えるモデル一覧を取得する
+                # これが成功すれば、接続は100%確実
+                available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+                
+                if available_models:
+                    st.success(f"✅ 接続OK (利用可能モデル数: {len(available_models)})")
+                    # デバッグ用にモデル名を表示（小さく）
+                    st.caption(f"Default: {available_models[0]}")
+                else:
+                    st.error("⚠️ 接続はできたけど、使えるモデルがありません。")
+            except Exception as e:
+                st.error(f"❌ API接続エラー: {e}")
+                available_models = []
 
-    st.info("データソース: World Bank Open Data (via wbgapi) | AIエンジン: Google Gemini")
+    st.info("データソース: World Bank Open Data (via wbgapi) | AIエンジン: Google Gemini (Auto-Select)")
 
     indicators = {
         'FP.CPI.TOTL.ZG': 'インフレ率 (Inflation)',
@@ -70,9 +84,30 @@ def main():
             if st.button("AI解説を生成する"):
                 if not api_key:
                     st.error("Secrets未設定")
+                elif not available_models:
+                    st.error("利用可能なAIモデルが見つかりません。")
                 else:
-                    with st.spinner("AIが分析中..."):
+                    with st.spinner("AIモデルを選定して分析中..."):
                         try:
+                            # 1. 優先順位を決めてモデルを選ぶ (Flash > Pro > その他)
+                            target_model = None
+                            for m in available_models:
+                                if 'flash' in m:
+                                    target_model = m
+                                    break
+                            
+                            if not target_model:
+                                for m in available_models:
+                                    if 'pro' in m:
+                                        target_model = m
+                                        break
+                            
+                            # 2. それでもなければリストの先頭を使う（絶対に存在する名前）
+                            if not target_model:
+                                target_model = available_models[0]
+
+                            st.caption(f"使用モデル: {target_model}") # どのモデルが選ばれたか表示
+
                             latest_year = df['year'].max()
                             latest_data = df[df['year'] == latest_year].to_string()
                             prompt = f"""
@@ -81,15 +116,13 @@ def main():
                             データ: {latest_data}
                             """
                             
-                            # 【修正】バックアップ（try-except）を削除し、最新モデルを直指定
-                            model = genai.GenerativeModel('gemini-1.5-flash')
+                            model = genai.GenerativeModel(target_model)
                             response = model.generate_content(prompt)
                             
                             st.success("分析完了！")
                             st.markdown(response.text)
                         except Exception as e:
-                            # もしエラーが出たら、バックアップに逃げずに正直に表示する
-                            st.error(f"AIエラー詳細: {e}")
+                            st.error(f"エラー詳細: {e}")
         st.divider()
         st.caption("Compliance: Data from World Bank API. Analysis by Google Gemini.")
     else:
